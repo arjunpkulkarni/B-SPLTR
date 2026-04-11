@@ -1,5 +1,4 @@
 import uuid
-from decimal import Decimal
 
 from fastapi import APIRouter, Depends, UploadFile, File
 from sqlalchemy.orm import Session
@@ -8,7 +7,7 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
 from app.core.response import success_response, error_response
-from app.schemas.receipt import ReceiptUploadOut, ReceiptItemOut, ReceiptItemUpdate, ParsedReceipt
+from app.schemas.receipt import ReceiptUploadOut, ReceiptItemOut, ReceiptItemUpdate
 from app.services.receipt_parser_service import ReceiptParserService
 
 router = APIRouter(prefix="/bills/{bill_id}/receipt", tags=["Receipts"])
@@ -61,24 +60,10 @@ def parse_receipt(
 ):
     svc = ReceiptParserService(db)
     try:
-        items = svc.parse_receipt(str(bill_id))
+        parsed = svc.parse_receipt(str(bill_id))
     except ValueError as e:
         return error_response("PARSE_ERROR", str(e), 400)
 
-    items_out = [ReceiptItemOut.model_validate(item) for item in items]
-
-    subtotal = sum((i.total_price for i in items_out), Decimal("0"))
-    taxable = sum((i.total_price for i in items_out if i.is_taxable), Decimal("0"))
-    tax = (taxable * Decimal("0.09")).quantize(Decimal("0.01"))
-    total = subtotal + tax
-
-    parsed = ParsedReceipt(
-        merchant_name=None,
-        items=[i.model_dump() for i in items_out],
-        subtotal=subtotal,
-        tax=tax,
-        total=total,
-    )
     return success_response(data=parsed.model_dump(), message="Receipt parsed successfully")
 
 

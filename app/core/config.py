@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     STRIPE_WEBHOOK_SECRET: str = ""
     STRIPE_PUBLISHABLE_KEY: str = ""
 
+    GROQ_API_KEY: str = ""
+    GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
+    GROQ_RECEIPT_VISION_MODEL: str = "meta-llama/llama-4-scout-17b-16e-instruct"
+    GROQ_RECEIPT_CLEANUP_MODEL: str = "openai/gpt-oss-20b"
+
     UPLOAD_DIR: str = "./uploads"
 
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]

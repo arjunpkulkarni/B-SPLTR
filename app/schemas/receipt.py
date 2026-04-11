@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ReceiptUploadOut(BaseModel):
@@ -43,9 +43,16 @@ class ReceiptItemUpdate(BaseModel):
     is_taxable: bool | None = None
 
 
+class ParsedReceiptItem(BaseModel):
+    name: str
+    price: Decimal
+    quantity: int
+
+
 class ParsedReceipt(BaseModel):
-    merchant_name: str | None = None
-    items: list[ReceiptItemOut]
-    subtotal: Decimal
+    items: list[ParsedReceiptItem]
     tax: Decimal
     total: Decimal
+    merchant_name: str | None = None
+    subtotal: Decimal | None = None
+    warnings: list[str] = Field(default_factory=list)
