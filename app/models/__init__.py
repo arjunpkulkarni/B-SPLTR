@@ -8,6 +8,7 @@ from app.models.payment import Payment
 from app.models.settlement import Settlement
 from app.models.notification import Notification
 from app.models.sms_log import SmsLog
+from app.models.virtual_card import VirtualCard
 
 __all__ = [
     "User",
@@ -20,4 +21,5 @@ __all__ = [
     "Settlement",
     "Notification",
     "SmsLog",
+    "VirtualCard",
 ]

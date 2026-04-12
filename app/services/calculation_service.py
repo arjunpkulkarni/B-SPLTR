@@ -236,19 +236,30 @@ class CalculationService:
             if not assignments:
                 continue
 
-            equal_count = sum(1 for a in assignments if a.share_type == "equal")
-            total_equal = len(assignments)  # total for equal division calculation
+            # For mixed share types: fixed/percentage consume a known portion of the
+            # item price.  The remainder is split among "equal" assignments.
+            equal_assignments = [a for a in assignments if a.share_type == "equal"]
+            non_equal = [a for a in assignments if a.share_type != "equal"]
 
-            for a in assignments:
+            claimed = Decimal("0")
+            for a in non_equal:
                 a.amount_owed = self._calculate_amount_owed(
-                    a.share_type, a.share_value, item, total_equal
+                    a.share_type, a.share_value, item, 1
                 )
+                claimed += a.amount_owed
+
+            if equal_assignments:
+                remainder = max(item.total_price - claimed, Decimal("0"))
+                per_person = (remainder / len(equal_assignments)).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
+                for a in equal_assignments:
+                    a.amount_owed = per_person
 
             items_recalculated += 1
 
         bill = self.db.query(Bill).filter(Bill.id == bill_id).first()
         if bill:
-            # Recalculate bill total from components
             bill.total = bill.subtotal + bill.tax + bill.tip + bill.service_fee
 
         self.db.commit()

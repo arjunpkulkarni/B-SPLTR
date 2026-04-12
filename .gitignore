@@ -132,3 +132,6 @@ dmypy.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Local test scripts (not for CI)
+test_local.py

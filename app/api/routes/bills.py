@@ -63,10 +63,15 @@ def get_bill(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    svc = BillService(db)
-    bill = svc.get_bill(str(bill_id))
-    if not bill:
-        return error_response("NOT_FOUND", "Bill not found", 404)
+    from app.api.deps_bill import require_bill_participant
+
+    try:
+        bill = require_bill_participant(db, str(bill_id), str(current_user.id))
+    except ValueError as e:
+        code = str(e)
+        if code == "NOT_FOUND":
+            return error_response("NOT_FOUND", "Bill not found", 404)
+        return error_response("FORBIDDEN", "Not authorized to view this bill", 403)
     return success_response(data=_bill_out(bill))
 
 
@@ -77,6 +82,16 @@ def update_bill(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from app.api.deps_bill import require_bill_owner
+
+    try:
+        require_bill_owner(db, str(bill_id), str(current_user.id))
+    except ValueError as e:
+        code = str(e)
+        if code == "NOT_FOUND":
+            return error_response("NOT_FOUND", "Bill not found", 404)
+        return error_response("FORBIDDEN", "Only the bill owner can update this bill", 403)
+
     svc = BillService(db)
     try:
         bill = svc.update_bill(str(bill_id), body.model_dump(exclude_unset=True))
@@ -92,6 +107,16 @@ def delete_bill(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from app.api.deps_bill import require_bill_owner
+
+    try:
+        require_bill_owner(db, str(bill_id), str(current_user.id))
+    except ValueError as e:
+        code = str(e)
+        if code == "NOT_FOUND":
+            return error_response("NOT_FOUND", "Bill not found", 404)
+        return error_response("FORBIDDEN", "Only the bill owner can delete this bill", 403)
+
     svc = BillService(db)
     try:
         svc.delete_bill(str(bill_id))
@@ -132,6 +157,16 @@ def get_bill_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from app.api.deps_bill import require_bill_participant
+
+    try:
+        require_bill_participant(db, str(bill_id), str(current_user.id))
+    except ValueError as e:
+        code = str(e)
+        if code == "NOT_FOUND":
+            return error_response("NOT_FOUND", "Bill not found", 404)
+        return error_response("FORBIDDEN", "Not authorized to view this bill", 403)
+
     bill_svc = BillService(db)
     receipt_svc = ReceiptParserService(db)
     calc_svc = CalculationService(db)

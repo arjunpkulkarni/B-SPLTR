@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -28,6 +28,17 @@ class Bill(Base):
     service_fee: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
     total: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # --- Readiness / payout gate ---
+    ready_to_pay: Mapped[bool] = mapped_column(Boolean, default=False)
+    ready_marked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    ready_marked_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    ready_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -35,7 +46,7 @@ class Bill(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    owner = relationship("User", back_populates="bills_owned")
+    owner = relationship("User", back_populates="bills_owned", foreign_keys=[owner_id])
     members = relationship(
         "BillMember", back_populates="bill", cascade="all, delete-orphan"
     )
@@ -50,4 +61,7 @@ class Bill(Base):
     )
     settlements = relationship(
         "Settlement", back_populates="bill", cascade="all, delete-orphan"
+    )
+    virtual_cards = relationship(
+        "VirtualCard", back_populates="bill", cascade="all, delete-orphan"
     )
