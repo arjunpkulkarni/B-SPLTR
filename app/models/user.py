@@ -33,7 +33,9 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    bills_owned = relationship("Bill", back_populates="owner")
+    bills_owned = relationship(
+        "Bill", back_populates="owner", foreign_keys="[Bill.owner_id]"
+    )
     bill_memberships = relationship("BillMember", back_populates="user")
     payments = relationship("Payment", back_populates="user")
     notifications = relationship("Notification", back_populates="user")

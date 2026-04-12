@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     STRIPE_WEBHOOK_SECRET: str = ""
     STRIPE_PUBLISHABLE_KEY: str = ""
 
+    # Stripe Issuing (virtual cards)
+    STRIPE_ISSUING_ENABLED: bool = False
+
+    # Feature flags
+    FEATURE_VIRTUAL_CARDS: bool = False
+
     GROQ_API_KEY: str = ""
     GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
     GROQ_RECEIPT_VISION_MODEL: str = "meta-llama/llama-4-scout-17b-16e-instruct"

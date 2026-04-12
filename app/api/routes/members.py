@@ -20,6 +20,16 @@ def add_member(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from app.api.deps_bill import require_bill_participant
+
+    try:
+        require_bill_participant(db, str(bill_id), str(current_user.id))
+    except ValueError as e:
+        code = str(e)
+        if code == "NOT_FOUND":
+            return error_response("NOT_FOUND", "Bill not found", 404)
+        return error_response("FORBIDDEN", "Not authorized", 403)
+
     svc = BillService(db)
     try:
         member = svc.add_member(
@@ -43,6 +53,16 @@ def list_members(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from app.api.deps_bill import require_bill_participant
+
+    try:
+        require_bill_participant(db, str(bill_id), str(current_user.id))
+    except ValueError as e:
+        code = str(e)
+        if code == "NOT_FOUND":
+            return error_response("NOT_FOUND", "Bill not found", 404)
+        return error_response("FORBIDDEN", "Not authorized", 403)
+
     svc = BillService(db)
     members = svc.get_members(str(bill_id))
     members_data = [BillMemberOut.model_validate(m).model_dump() for m in members]
@@ -79,6 +99,16 @@ def remove_member(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from app.api.deps_bill import require_bill_owner
+
+    try:
+        require_bill_owner(db, str(bill_id), str(current_user.id))
+    except ValueError as e:
+        code = str(e)
+        if code == "NOT_FOUND":
+            return error_response("NOT_FOUND", "Bill not found", 404)
+        return error_response("FORBIDDEN", "Only the bill owner can remove members", 403)
+
     svc = BillService(db)
     try:
         svc.remove_member(str(member_id))

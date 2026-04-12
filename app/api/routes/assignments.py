@@ -47,6 +47,16 @@ def create_assignments(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from app.api.deps_bill import require_bill_participant
+
+    try:
+        require_bill_participant(db, str(bill_id), str(current_user.id))
+    except ValueError as e:
+        code = str(e)
+        if code == "NOT_FOUND":
+            return error_response("NOT_FOUND", "Bill not found", 404)
+        return error_response("FORBIDDEN", "Not authorized", 403)
+
     svc = CalculationService(db)
     assignments_dicts = [a.model_dump() for a in body.assignments]
     try:
@@ -81,6 +91,16 @@ def list_assignments(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from app.api.deps_bill import require_bill_participant
+
+    try:
+        require_bill_participant(db, str(bill_id), str(current_user.id))
+    except ValueError as e:
+        code = str(e)
+        if code == "NOT_FOUND":
+            return error_response("NOT_FOUND", "Bill not found", 404)
+        return error_response("FORBIDDEN", "Not authorized", 403)
+
     svc = CalculationService(db)
     assignments = svc.get_assignments(str(bill_id))
     results = [_assignment_out(a) for a in assignments]
@@ -179,6 +199,16 @@ def get_balance_breakdown(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from app.api.deps_bill import require_bill_participant
+
+    try:
+        require_bill_participant(db, str(bill_id), str(current_user.id))
+    except ValueError as e:
+        code = str(e)
+        if code == "NOT_FOUND":
+            return error_response("NOT_FOUND", "Bill not found", 404)
+        return error_response("FORBIDDEN", "Not authorized", 403)
+
     svc = CalculationService(db)
     try:
         breakdown = svc.get_balance_breakdown(str(bill_id))
@@ -194,6 +224,16 @@ def get_member_balances(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from app.api.deps_bill import require_bill_participant
+
+    try:
+        require_bill_participant(db, str(bill_id), str(current_user.id))
+    except ValueError as e:
+        code = str(e)
+        if code == "NOT_FOUND":
+            return error_response("NOT_FOUND", "Bill not found", 404)
+        return error_response("FORBIDDEN", "Not authorized", 403)
+
     svc = CalculationService(db)
     try:
         balances = svc.get_member_balances(str(bill_id))
