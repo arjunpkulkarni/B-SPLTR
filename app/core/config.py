@@ -1,4 +1,9 @@
-from pydantic_settings import BaseSettings
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Repo root (B-SPLTR/), so .env loads even when cwd is not the project directory
+_ENV_FILE = Path(__file__).resolve().parent.parent.parent / ".env"
 
 
 class Settings(BaseSettings):
@@ -29,10 +34,11 @@ class Settings(BaseSettings):
     APPLE_BUNDLE_ID: str = ""
     APPLE_PRIVATE_KEY_PATH: str = "./apple_private_key.p8"
 
-    # Twilio Programmable SMS (payment requests & reminders)
+    # Twilio Programmable SMS + Verify (OTP)
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_PHONE_NUMBER: str = ""  # E.164, e.g. +15551234567
+    TWILIO_VERIFY_SERVICE_SID: str = ""
 
     # Base URL used in SMS links (must serve GET /pay/{token}, often API or app proxy)
     PUBLIC_PAYMENT_BASE_URL: str = "https://app.wealthsplit.com"
@@ -52,10 +58,6 @@ class Settings(BaseSettings):
 
     # Run reminder job on interval (seconds); 0 disables in-process scheduler
     REMINDER_JOB_INTERVAL_SEC: int = 3600
-    # Twilio Verify (SMS OTP). Leave empty to use OTP_DEV_MODE only.
-    TWILIO_ACCOUNT_SID: str = ""
-    TWILIO_AUTH_TOKEN: str = ""
-    TWILIO_VERIFY_SERVICE_SID: str = ""
 
     # When true (or when Twilio is not configured), use in-memory OTP for local/dev.
     OTP_DEV_MODE: bool = False
@@ -63,7 +65,11 @@ class Settings(BaseSettings):
     # Max OTP send attempts per E.164 phone per rolling hour (in addition to IP limits)
     OTP_MAX_SENDS_PER_PHONE_PER_HOUR: int = 5
 
-    model_config = {"env_file": ".env", "extra": "ignore"}
+    model_config = SettingsConfigDict(
+        env_file=str(_ENV_FILE),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 settings = Settings()
