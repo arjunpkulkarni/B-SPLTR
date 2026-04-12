@@ -106,12 +106,17 @@ cp .env.example .env
 # 2. Start Postgres + API
 docker compose up --build
 
-# 3. Run migrations (in a second terminal)
+# 3. Run Alembic migrations (if you have revisions under alembic/versions/)
 docker compose exec api alembic upgrade head
 
-# 4. Seed demo data
+# 4. Manual SQL migrations (required for payment/SMS columns — keeps DB in sync with SQLAlchemy models)
+docker compose exec -T db psql -U postgres -d wealthsplit < migration_sms_notifications.sql
+
+# 5. Seed demo data
 docker compose exec api python -m scripts.seed
 ```
+
+If the database was created before `payments.payment_link_token` and related columns existed, skipping step 4 causes **500 errors** on routes that query `payments` (for example `GET /dashboard/active-bills`).
 
 API available at http://localhost:8000  
 Swagger docs at http://localhost:8000/docs
