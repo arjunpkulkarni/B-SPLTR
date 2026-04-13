@@ -2,6 +2,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.config import settings
 from app.models.bill import Bill
 from app.models.bill_member import BillMember
 from app.models.item_assignment import ItemAssignment
@@ -219,6 +220,59 @@ class CalculationService:
             self.db.refresh(a)
         return assignments
 
+    def calculate_service_fee(self, bill_id: str) -> Decimal:
+        """
+        Calculate service fee based on bill's service_fee_type.
+        Returns the calculated fee amount.
+        """
+        bill = self.db.query(Bill).filter(Bill.id == bill_id).first()
+        if not bill:
+            return Decimal("0")
+
+        # Use bill-specific settings or fall back to global defaults
+        fee_type = bill.service_fee_type or settings.SERVICE_FEE_TYPE
+        
+        if fee_type == "flat":
+            # Use bill's stored flat fee or global default
+            flat_amount = Decimal(str(settings.SERVICE_FEE_FLAT_AMOUNT))
+            return flat_amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        
+        elif fee_type == "percentage":
+            # Use bill's percentage or global default
+            percentage = bill.service_fee_percentage or Decimal(str(settings.SERVICE_FEE_PERCENTAGE))
+            # Calculate percentage of subtotal
+            subtotal = bill.subtotal or Decimal("0")
+            fee = (subtotal * percentage / Decimal("100")).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+            return fee
+        
+        return Decimal("0")
+
+    def apply_service_fee(self, bill_id: str, fee_type: str | None = None, percentage: Decimal | None = None) -> Bill:
+        """
+        Apply service fee to a bill. 
+        If fee_type and percentage are provided, update the bill's settings.
+        Then calculate and store the fee amount.
+        """
+        bill = self.db.query(Bill).filter(Bill.id == bill_id).first()
+        if not bill:
+            raise ValueError(f"Bill {bill_id} not found")
+
+        # Update bill's service fee settings if provided
+        if fee_type:
+            bill.service_fee_type = fee_type
+        if percentage is not None:
+            bill.service_fee_percentage = percentage
+
+        # Calculate and apply the fee
+        bill.service_fee = self.calculate_service_fee(bill_id)
+        bill.total = bill.subtotal + bill.tax + bill.tip + bill.service_fee
+
+        self.db.commit()
+        self.db.refresh(bill)
+        return bill
+
     def recalculate(self, bill_id: str) -> dict:
         items = (
             self.db.query(ReceiptItem)
@@ -260,6 +314,8 @@ class CalculationService:
 
         bill = self.db.query(Bill).filter(Bill.id == bill_id).first()
         if bill:
+            # Recalculate service fee based on current settings
+            bill.service_fee = self.calculate_service_fee(bill_id)
             bill.total = bill.subtotal + bill.tax + bill.tip + bill.service_fee
 
         self.db.commit()
@@ -281,7 +337,12 @@ class CalculationService:
         bill_subtotal = bill.subtotal or Decimal("0")
         bill_tax = bill.tax or Decimal("0")
         bill_tip = bill.tip or Decimal("0")
+        
+        # Auto-calculate service fee if not set (for backwards compatibility with old bills)
         bill_fee = bill.service_fee or Decimal("0")
+        if bill_fee == Decimal("0") and bill_subtotal > 0:
+            # Calculate fee on-the-fly using defaults
+            bill_fee = self.calculate_service_fee(bill_id)
 
         member_breakdowns = []
         total_paid_all = Decimal("0")

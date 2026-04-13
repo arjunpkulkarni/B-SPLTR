@@ -10,7 +10,7 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
 from app.core.response import success_response, error_response
-from app.schemas.bill import BillCreate, BillUpdate, BillOut, BillActivity
+from app.schemas.bill import BillCreate, BillUpdate, BillOut, BillActivity, ServiceFeeUpdate
 from app.schemas.bill_member import BillMemberOut
 from app.schemas.receipt import ReceiptItemOut
 from app.services.bill_service import BillService
@@ -204,6 +204,46 @@ def get_bill_summary(
         "total_remaining": total_remaining,
     }
     return success_response(data=summary)
+
+
+@router.post("/{bill_id}/service-fee")
+def update_service_fee(
+    bill_id: uuid.UUID,
+    body: ServiceFeeUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Configure and apply service fee to a bill (owner-only)."""
+    from app.api.deps_bill import require_bill_owner
+
+    try:
+        require_bill_owner(db, str(bill_id), str(current_user.id))
+    except ValueError as e:
+        code = str(e)
+        if code == "NOT_FOUND":
+            return error_response("NOT_FOUND", "Bill not found", 404)
+        return error_response("FORBIDDEN", "Only the bill owner can update service fees", 403)
+
+    calc_svc = CalculationService(db)
+    try:
+        bill = calc_svc.apply_service_fee(
+            str(bill_id),
+            fee_type=body.fee_type,
+            percentage=body.percentage
+        )
+    except ValueError as e:
+        return error_response("NOT_FOUND", str(e), 404)
+
+    return success_response(
+        data={
+            "bill_id": str(bill.id),
+            "service_fee_type": bill.service_fee_type,
+            "service_fee_percentage": str(bill.service_fee_percentage) if bill.service_fee_percentage else None,
+            "service_fee": str(bill.service_fee),
+            "total": str(bill.total),
+        },
+        message="Service fee updated"
+    )
 
 
 @router.get("/{bill_id}/activity")

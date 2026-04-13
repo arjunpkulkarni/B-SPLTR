@@ -4,18 +4,26 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.response import error_response, success_response
 from app.db.session import get_db
 from app.services.payment_service import PaymentService
+from app.services.calculation_service import CalculationService
+from app.models.item_assignment import ItemAssignment
+from app.models.receipt_item import ReceiptItem
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Public payments"])
 
 
+@router.get("/pay/{token}/page", include_in_schema=False)
+def serve_payment_page(token: str):
+    """Serve the web payment page HTML for browser users."""
+    return FileResponse("static/pay.html")
 def _token_expired(payment) -> bool:
     """Return True if the pay-link token has exceeded PAY_LINK_TTL_MINUTES."""
     ttl = settings.PAY_LINK_TTL_MINUTES
@@ -79,8 +87,52 @@ def get_public_payment(token: str, db: Session = Depends(get_db)):
 
     db.refresh(payment)
     bill = payment.bill
+    member = payment.member
     base = settings.PUBLIC_PAYMENT_BASE_URL.rstrip("/")
     deep_link = f"wealthsplit://pay?token={token}"
+
+    # Get member's assigned items
+    assignments = (
+        db.query(ItemAssignment)
+        .join(ReceiptItem, ItemAssignment.receipt_item_id == ReceiptItem.id)
+        .filter(ItemAssignment.bill_member_id == payment.bill_member_id)
+        .all()
+    )
+
+    items = []
+    for assignment in assignments:
+        item = assignment.item
+        items.append({
+            "name": item.name,
+            "quantity": item.quantity,
+            "unit_price": str(item.unit_price),
+            "total_price": str(item.total_price),
+            "assigned_amount": str(assignment.amount_owed),
+            "share_type": assignment.share_type,
+        })
+
+    # Get payment breakdown for this member
+    calc_svc = CalculationService(db)
+    breakdown_data = calc_svc.get_balance_breakdown(str(bill.id))
+    
+    member_breakdown = None
+    for m in breakdown_data["members"]:
+        if m["member_id"] == str(member.id):
+            member_breakdown = {
+                "subtotal": str(m["subtotal"]),
+                "tax_share": str(m["tax_share"]),
+                "tip_share": str(m["tip_share"]),
+                "fee_share": str(m["fee_share"]),
+                "total_owed": str(m["total_owed"]),
+            }
+            break
+
+    # Add service fee info
+    service_fee_info = {
+        "type": bill.service_fee_type or settings.SERVICE_FEE_TYPE,
+        "amount": str(bill.service_fee),
+        "percentage": str(bill.service_fee_percentage) if bill.service_fee_percentage else None,
+    }
 
     return success_response(
         data={
@@ -89,7 +141,14 @@ def get_public_payment(token: str, db: Session = Depends(get_db)):
             "amount": str(payment.amount),
             "currency": payment.currency,
             "bill_title": bill.title if bill else None,
+            "bill_id": str(bill.id),
+            "merchant_name": bill.merchant_name,
+            "member_nickname": member.nickname if member else None,
             "stripe_client_secret": payment.stripe_client_secret,
+            "stripe_publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
+            "items": items,
+            "breakdown": member_breakdown,
+            "service_fee": service_fee_info,
             "pay_url": f"{base}/pay/{token}",
             "deep_link": deep_link,
         }

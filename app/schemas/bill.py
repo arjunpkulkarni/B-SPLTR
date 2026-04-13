@@ -37,6 +37,8 @@ class BillOut(BaseModel):
     tax: Decimal
     tip: Decimal
     service_fee: Decimal
+    service_fee_type: str | None = None
+    service_fee_percentage: Decimal | None = None
     total: Decimal
     notes: str | None = None
     member_count: int = 0
@@ -64,6 +66,11 @@ class ReadinessOut(BaseModel):
     ready_reason: str | None = None
     ready_marked_at: datetime | None = None
     ready_marked_by: uuid.UUID | None = None
+
+
+class ServiceFeeUpdate(BaseModel):
+    fee_type: Literal["flat", "percentage"]
+    percentage: Decimal | None = Field(default=None, ge=0, le=100, description="Percentage (0-100) for percentage-based fees")
 
 
 class BillActivity(BaseModel):
