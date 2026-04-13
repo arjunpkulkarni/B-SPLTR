@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pay Your Share - WealthSplit</title>
+    <script src="https://js.stripe.com/v3/"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo {
+            font-size: 32px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .bill-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #1a202c;
+            margin-bottom: 8px;
+        }
+
+        .merchant-name {
+            font-size: 16px;
+            color: #718096;
+            margin-bottom: 20px;
+        }
+
+        .member-info {
+            background: #f7fafc;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .member-label {
+            font-size: 14px;
+            color: #718096;
+            margin-bottom: 5px;
+        }
+
+        .member-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .amount-section {
+            text-align: center;
+            padding: 25px;
+            background: #f7fafc;
+            border-radius: 12px;
+            margin-bottom: 25px;
+        }
+
+        .amount-label {
+            font-size: 14px;
+            color: #718096;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .amount {
+            font-size: 48px;
+            font-weight: 700;
+            color: #1a202c;
+        }
+
+        .items-section {
+            margin-bottom: 25px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 15px;
+        }
+
+        .item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .item:last-child {
+            border-bottom: none;
+        }
+
+        .item-name {
+            font-size: 15px;
+            color: #2d3748;
+            flex: 1;
+        }
+
+        .item-amount {
+            font-size: 15px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .breakdown {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+        }
+
+        .breakdown-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            font-size: 14px;
+        }
+
+        .breakdown-label {
+            color: #718096;
+        }
+
+        .breakdown-value {
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .breakdown-total {
+            border-top: 2px solid #cbd5e0;
+            margin-top: 10px;
+            padding-top: 12px;
+            font-size: 16px;
+        }
+
+        .breakdown-total .breakdown-value {
+            color: #667eea;
+            font-size: 18px;
+        }
+
+        .payment-form {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 8px;
+        }
+
+        #card-element {
+            padding: 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            background: white;
+        }
+
+        #card-element.StripeElement--focus {
+            border-color: #667eea;
+        }
+
+        #card-element.StripeElement--invalid {
+            border-color: #f56565;
+        }
+
+        #card-errors {
+            color: #f56565;
+            font-size: 14px;
+            margin-top: -15px;
+            margin-bottom: 15px;
+            min-height: 20px;
+        }
+
+        .pay-button {
+            width: 100%;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 18px;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-height: 56px;
+        }
+
+        .pay-button:hover:not(:disabled) {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .pay-button:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .success-message, .error-message {
+            text-align: center;
+            padding: 30px;
+        }
+
+        .success-icon, .error-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+
+        .success-icon {
+            color: #48bb78;
+        }
+
+        .error-icon {
+            color: #f56565;
+        }
+
+        .message-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #1a202c;
+        }
+
+        .message-text {
+            font-size: 16px;
+            color: #718096;
+            line-height: 1.6;
+        }
+
+        .powered-by {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #a0aec0;
+        }
+
+        .error-container {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 20px;
+            }
+
+            .amount {
+                font-size: 40px;
+            }
+
+            .bill-title {
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="app">
+        <div class="header">
+            <div class="logo">WealthSplit</div>
+        </div>
+
+        <div id="loading" style="text-align: center; padding: 40px;">
+            <div class="loading"></div>
+            <p style="margin-top: 15px; color: #718096;">Loading payment details...</p>
+        </div>
+
+        <div id="error-view" style="display: none;">
+            <div class="error-container">
+                <div class="error-icon">⚠️</div>
+                <h2 class="message-title">Payment Link Invalid</h2>
+                <p class="message-text" id="error-message">This payment link is invalid or has expired.</p>
+            </div>
+        </div>
+
+        <div id="already-paid-view" style="display: none;">
+            <div class="success-message">
+                <div class="success-icon">✅</div>
+                <h2 class="message-title">Already Paid</h2>
+                <p class="message-text">This payment has already been completed. Thank you!</p>
+            </div>
+        </div>
+
+        <div id="payment-view" style="display: none;">
+            <h1 class="bill-title" id="bill-title"></h1>
+            <p class="merchant-name" id="merchant-name"></p>
+
+            <div class="member-info">
+                <div class="member-label">Paying for</div>
+                <div class="member-name" id="member-name"></div>
+            </div>
+
+            <div class="amount-section">
+                <div class="amount-label">Your Total</div>
+                <div class="amount" id="amount"></div>
+            </div>
+
+            <div class="items-section" id="items-section">
+                <h3 class="section-title">Your Items</h3>
+                <div id="items-list"></div>
+            </div>
+
+            <div class="breakdown" id="breakdown-section">
+                <h3 class="section-title">Payment Breakdown</h3>
+                <div id="breakdown-list"></div>
+            </div>
+
+            <form id="payment-form" class="payment-form">
+                <label class="form-label" for="card-element">
+                    Card Details
+                </label>
+                <div id="card-element"></div>
+                <div id="card-errors" role="alert"></div>
+                
+                <button type="submit" id="submit-button" class="pay-button">
+                    <span id="button-text">Pay Now</span>
+                    <span id="button-spinner" style="display: none;" class="loading"></span>
+                </button>
+            </form>
+
+            <div class="powered-by">
+                Secured by Stripe
+            </div>
+        </div>
+
+        <div id="success-view" style="display: none;">
+            <div class="success-message">
+                <div class="success-icon">🎉</div>
+                <h2 class="message-title">Payment Successful!</h2>
+                <p class="message-text">Your payment has been processed successfully. You'll receive a confirmation shortly.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Extract token from URL - handles both /pay/{token}/page and /web/pay/{token}
+        const pathParts = window.location.pathname.split('/').filter(p => p);
+        const token = pathParts.includes('page') ? pathParts[pathParts.length - 2] : pathParts[pathParts.length - 1];
+        
+        // API base URL (same origin)
+        const API_BASE_URL = window.location.origin;
+
+        let stripe, elements, cardElement, paymentData;
+
+        // Fetch payment details
+        async function loadPaymentDetails() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/pay/${token}`);
+                const result = await response.json();
+
+                if (!result.success) {
+                    showError(result.message || 'Invalid payment link');
+                    return;
+                }
+
+                paymentData = result.data;
+
+                if (paymentData.status !== 'pending') {
+                    showAlreadyPaid();
+                    return;
+                }
+
+                displayPaymentDetails();
+                initializeStripe();
+            } catch (error) {
+                console.error('Error loading payment:', error);
+                showError('Failed to load payment details. Please try again.');
+            }
+        }
+
+        function displayPaymentDetails() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('payment-view').style.display = 'block';
+
+            // Bill details
+            document.getElementById('bill-title').textContent = paymentData.bill_title || 'Bill Payment';
+            document.getElementById('merchant-name').textContent = paymentData.merchant_name || '';
+            document.getElementById('member-name').textContent = paymentData.member_nickname || 'Guest';
+
+            // Amount
+            const formatter = new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: paymentData.currency || 'USD'
+            });
+            document.getElementById('amount').textContent = formatter.format(paymentData.amount);
+
+            // Items
+            if (paymentData.items && paymentData.items.length > 0) {
+                const itemsList = document.getElementById('items-list');
+                paymentData.items.forEach(item => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'item';
+                    itemDiv.innerHTML = `
+                        <div class="item-name">
+                            ${item.name} ${item.quantity > 1 ? `(×${item.quantity})` : ''}
+                        </div>
+                        <div class="item-amount">${formatter.format(item.assigned_amount)}</div>
+                    `;
+                    itemsList.appendChild(itemDiv);
+                });
+            } else {
+                document.getElementById('items-section').style.display = 'none';
+            }
+
+            // Breakdown
+            if (paymentData.breakdown) {
+                const breakdownList = document.getElementById('breakdown-list');
+                const breakdown = paymentData.breakdown;
+
+                const rows = [
+                    { label: 'Subtotal', value: breakdown.subtotal },
+                    { label: 'Tax Share', value: breakdown.tax_share },
+                    { label: 'Tip Share', value: breakdown.tip_share },
+                    { label: 'Service Fee', value: breakdown.fee_share },
+                ];
+
+                rows.forEach(row => {
+                    if (parseFloat(row.value) > 0) {
+                        const rowDiv = document.createElement('div');
+                        rowDiv.className = 'breakdown-row';
+                        rowDiv.innerHTML = `
+                            <span class="breakdown-label">${row.label}</span>
+                            <span class="breakdown-value">${formatter.format(row.value)}</span>
+                        `;
+                        breakdownList.appendChild(rowDiv);
+                    }
+                });
+
+                const totalDiv = document.createElement('div');
+                totalDiv.className = 'breakdown-row breakdown-total';
+                totalDiv.innerHTML = `
+                    <span class="breakdown-label"><strong>Total</strong></span>
+                    <span class="breakdown-value">${formatter.format(breakdown.total_owed)}</span>
+                `;
+                breakdownList.appendChild(totalDiv);
+            } else {
+                document.getElementById('breakdown-section').style.display = 'none';
+            }
+        }
+
+        function initializeStripe() {
+            if (!paymentData.stripe_publishable_key) {
+                showError('Stripe configuration error. Please contact support.');
+                return;
+            }
+
+            stripe = Stripe(paymentData.stripe_publishable_key);
+            elements = stripe.elements();
+            
+            cardElement = elements.create('card', {
+                style: {
+                    base: {
+                        fontSize: '16px',
+                        color: '#2d3748',
+                        '::placeholder': {
+                            color: '#a0aec0',
+                        },
+                    },
+                },
+            });
+            
+            cardElement.mount('#card-element');
+            
+            cardElement.on('change', (event) => {
+                const displayError = document.getElementById('card-errors');
+                if (event.error) {
+                    displayError.textContent = event.error.message;
+                } else {
+                    displayError.textContent = '';
+                }
+            });
+
+            const form = document.getElementById('payment-form');
+            form.addEventListener('submit', handleSubmit);
+        }
+
+        async function handleSubmit(event) {
+            event.preventDefault();
+            setLoading(true);
+
+            const {error, paymentIntent} = await stripe.confirmCardPayment(
+                paymentData.stripe_client_secret,
+                {
+                    payment_method: {
+                        card: cardElement,
+                    }
+                }
+            );
+
+            if (error) {
+                showPaymentError(error.message);
+                setLoading(false);
+            } else if (paymentIntent.status === 'succeeded') {
+                showSuccess();
+            }
+        }
+
+        function setLoading(loading) {
+            const button = document.getElementById('submit-button');
+            const buttonText = document.getElementById('button-text');
+            const spinner = document.getElementById('button-spinner');
+            
+            button.disabled = loading;
+            buttonText.style.display = loading ? 'none' : 'inline';
+            spinner.style.display = loading ? 'inline-block' : 'none';
+        }
+
+        function showPaymentError(message) {
+            const displayError = document.getElementById('card-errors');
+            displayError.textContent = message;
+        }
+
+        function showError(message) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error-view').style.display = 'block';
+            document.getElementById('error-message').textContent = message;
+        }
+
+        function showAlreadyPaid() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('already-paid-view').style.display = 'block';
+        }
+
+        function showSuccess() {
+            document.getElementById('payment-view').style.display = 'none';
+            document.getElementById('success-view').style.display = 'block';
+        }
+
+        // Load payment details on page load
+        loadPaymentDetails();
+    </script>
+</body>
+</html>

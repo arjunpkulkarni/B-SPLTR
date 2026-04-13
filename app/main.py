@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from app.core.config import settings
 from app.middleware.error_handler import register_error_handlers
 from app.limiter import limiter
@@ -92,6 +94,9 @@ app.include_router(notifications.router)
 app.include_router(pay_public.router)
 app.include_router(internal_jobs.router)
 app.include_router(virtual_cards.router)
+
+# Mount static files for web payment page
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 @app.get("/health", tags=["health"])
