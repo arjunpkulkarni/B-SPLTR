@@ -71,6 +71,9 @@ class Settings(BaseSettings):
     # Max OTP send attempts per E.164 phone per rolling hour (in addition to IP limits)
     OTP_MAX_SENDS_PER_PHONE_PER_HOUR: int = 5
 
+    # Public pay link TTL in minutes (0 = no expiry)
+    PAY_LINK_TTL_MINUTES: int = 20
+
     # Set to "production" to enable prod safety checks (secret validation, docs disabled)
     ENVIRONMENT: str = "development"
 

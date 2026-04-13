@@ -1,6 +1,7 @@
 """Public payment link resolution (no auth). Token is opaque; never expose internal UUIDs in URLs."""
 
 import logging
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -15,6 +16,20 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Public payments"])
 
 
+def _token_expired(payment) -> bool:
+    """Return True if the pay-link token has exceeded PAY_LINK_TTL_MINUTES."""
+    ttl = settings.PAY_LINK_TTL_MINUTES
+    if ttl <= 0:
+        return False
+    created = payment.created_at
+    if created is None:
+        return False
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    age_seconds = (datetime.now(timezone.utc) - created).total_seconds()
+    return age_seconds > ttl * 60
+
+
 @router.get("/pay/{token}")
 def get_public_payment(token: str, db: Session = Depends(get_db)):
     """
@@ -27,6 +42,14 @@ def get_public_payment(token: str, db: Session = Depends(get_db)):
             "NOT_FOUND",
             "Invalid or expired payment link.",
             404,
+        )
+
+    if payment.status == "pending" and _token_expired(payment):
+        logger.info("pay_link_expired", extra={"payment_id": str(payment.id)})
+        return error_response(
+            "TOKEN_EXPIRED",
+            "This payment link has expired. Please request a new one.",
+            410,
         )
 
     bill = payment.bill
