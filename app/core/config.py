@@ -11,9 +11,13 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/wealthsplit"
 
-    JWT_SECRET_KEY: str = "dev-secret-change-me"
-    JWT_ALGORITHM: str = "HS256"
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    # ── Supabase (single source of truth for auth) ──
+    SUPABASE_URL: str = ""
+    SUPABASE_ANON_KEY: str = ""
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
+    SUPABASE_JWT_SECRET: str = ""
+    # If empty, derived as {SUPABASE_URL}/auth/v1 — set explicitly if your JWT iss differs.
+    SUPABASE_JWT_ISSUER: str = ""
 
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
@@ -34,18 +38,6 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 
-    # Apple Sign In
-    APPLE_TEAM_ID: str = ""
-    APPLE_KEY_ID: str = ""
-    APPLE_BUNDLE_ID: str = ""
-    APPLE_PRIVATE_KEY_PATH: str = "./apple_private_key.p8"
-
-    # Twilio Programmable SMS + Verify (OTP)
-    TWILIO_ACCOUNT_SID: str = ""
-    TWILIO_AUTH_TOKEN: str = ""
-    TWILIO_PHONE_NUMBER: str = ""  # E.164, e.g. +15551234567
-    TWILIO_VERIFY_SERVICE_SID: str = ""
-
     # Base URL used in SMS links (must serve GET /pay/{token}, often API or app proxy)
     PUBLIC_PAYMENT_BASE_URL: str = "https://app.wealthsplit.com"
 
@@ -64,12 +56,6 @@ class Settings(BaseSettings):
 
     # Run reminder job on interval (seconds); 0 disables in-process scheduler
     REMINDER_JOB_INTERVAL_SEC: int = 3600
-
-    # When true (or when Twilio is not configured), use in-memory OTP for local/dev.
-    OTP_DEV_MODE: bool = False
-
-    # Max OTP send attempts per E.164 phone per rolling hour (in addition to IP limits)
-    OTP_MAX_SENDS_PER_PHONE_PER_HOUR: int = 5
 
     model_config = SettingsConfigDict(
         env_file=str(_ENV_FILE),

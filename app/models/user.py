@@ -9,6 +9,8 @@ from app.db.base import Base
 
 
 class User(Base):
+    """Local profile row keyed by Supabase auth user UUID."""
+
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -17,9 +19,6 @@ class User(Base):
     email: Mapped[str] = mapped_column(
         String(255), unique=True, nullable=False, index=True
     )
-    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    apple_id: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
-    auth_provider: Mapped[str] = mapped_column(String(50), default="email")
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     phone: Mapped[str | None] = mapped_column(
