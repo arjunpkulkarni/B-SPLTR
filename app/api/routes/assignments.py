@@ -86,7 +86,7 @@ def _assignment_out(assignment) -> dict:
     """Serialize an assignment with item_name and member_nickname populated."""
     assignment.item_name = assignment.item.name if assignment.item else None
     assignment.member_nickname = assignment.member.nickname if assignment.member else None
-    return AssignmentOut.model_validate(assignment).model_dump()
+    return AssignmentOut.model_validate(assignment).model_dump(mode="json")
 
 
 @router.post("/assignments")

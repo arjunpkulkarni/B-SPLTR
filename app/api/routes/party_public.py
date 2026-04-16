@@ -118,7 +118,7 @@ def _load_assignments_payload(bill_id: str) -> list:
         for a in assignments:
             a.item_name = a.item.name if a.item else None
             a.member_nickname = a.member.nickname if a.member else None
-            payload.append(AssignmentOut.model_validate(a).model_dump())
+            payload.append(AssignmentOut.model_validate(a).model_dump(mode="json"))
         return payload
     finally:
         db.close()
