@@ -472,36 +472,42 @@ class ReceiptParserService:
             if not normalized:
                 continue
 
+            name = normalized["name"]
             price = normalized["price"]
             quantity = normalized["quantity"]
-            total_price = price
-            unit_price = (
-                (price / quantity).quantize(MONEY_QUANTIZE, rounding=ROUND_HALF_UP)
-                if quantity > 1
-                else price
-            )
 
-            db_item = ReceiptItem(
-                receipt_id=receipt.id,
-                bill_id=bill_id,
-                name=normalized["name"],
-                quantity=quantity,
-                unit_price=unit_price,
-                total_price=total_price,
-                category=None,
-                confidence=None,
-                is_taxable=True,
-                sort_order=len(db_items),
-            )
-            self.db.add(db_item)
-            db_items.append(db_item)
-            parsed_items.append(
-                ParsedReceiptItem(
-                    name=normalized["name"],
-                    price=total_price,
-                    quantity=quantity,
+            # Expand multi-unit lines into one quantity=1 row per unit so each unit
+            # can be assigned to a different member. Cents are distributed so the
+            # per-line sum matches the parsed total exactly (e.g. $10.00 / 3 ->
+            # $3.34 + $3.33 + $3.33).
+            total_cents = int((price * 100).to_integral_value(rounding=ROUND_HALF_UP))
+            base_cents, remainder = divmod(total_cents, quantity)
+
+            for unit_index in range(quantity):
+                unit_cents = base_cents + (1 if unit_index < remainder else 0)
+                unit_total = (Decimal(unit_cents) / Decimal(100)).quantize(MONEY_QUANTIZE)
+
+                db_item = ReceiptItem(
+                    receipt_id=receipt.id,
+                    bill_id=bill_id,
+                    name=name,
+                    quantity=1,
+                    unit_price=unit_total,
+                    total_price=unit_total,
+                    category=None,
+                    confidence=None,
+                    is_taxable=True,
+                    sort_order=len(db_items),
                 )
-            )
+                self.db.add(db_item)
+                db_items.append(db_item)
+                parsed_items.append(
+                    ParsedReceiptItem(
+                        name=name,
+                        price=unit_total,
+                        quantity=1,
+                    )
+                )
 
         if not parsed_items:
             raise ValueError("No purchasable items could be parsed from this receipt")
