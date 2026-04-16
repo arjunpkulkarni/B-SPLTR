@@ -106,13 +106,12 @@ def _build_receipt_response(db: Session, bill: Bill, members: list[BillMember]) 
     }
 
 
-def _broadcast_assignments(bill_id: str) -> None:
-    if bill_ws_manager.client_count(bill_id) == 0:
-        return
+def _load_assignments_payload(bill_id: str) -> list:
+    """Synchronously load the full assignment list for a bill (run in a threadpool)."""
+    from app.schemas.item_assignment import AssignmentOut
+
     db = SessionLocal()
     try:
-        from app.schemas.item_assignment import AssignmentOut
-
         svc = CalculationService(db)
         assignments = svc.get_assignments(bill_id)
         payload = []
@@ -120,20 +119,26 @@ def _broadcast_assignments(bill_id: str) -> None:
             a.item_name = a.item.name if a.item else None
             a.member_nickname = a.member.nickname if a.member else None
             payload.append(AssignmentOut.model_validate(a).model_dump())
-        loop = asyncio.get_event_loop()
-        loop.create_task(bill_ws_manager.broadcast(bill_id, "assignment_update", payload))
-    except Exception:
-        logger.exception("WS broadcast failed for bill %s", bill_id)
+        return payload
     finally:
         db.close()
 
 
-def _broadcast_event(bill_id: str, event: str, data: dict) -> None:
+async def _broadcast_assignments(bill_id: str) -> None:
     if bill_ws_manager.client_count(bill_id) == 0:
         return
     try:
-        loop = asyncio.get_event_loop()
-        loop.create_task(bill_ws_manager.broadcast(bill_id, event, data))
+        payload = await asyncio.to_thread(_load_assignments_payload, bill_id)
+        await bill_ws_manager.broadcast(bill_id, "assignment_update", payload)
+    except Exception:
+        logger.exception("WS broadcast failed for bill %s", bill_id)
+
+
+async def _broadcast_event(bill_id: str, event: str, data: dict) -> None:
+    if bill_ws_manager.client_count(bill_id) == 0:
+        return
+    try:
+        await bill_ws_manager.broadcast(bill_id, event, data)
     except Exception:
         logger.exception("WS broadcast failed for bill %s", bill_id)
 
@@ -159,7 +164,12 @@ def _recalculate_equal_splits_for_item(db: Session, item: ReceiptItem) -> None:
 # ── Endpoints ────────────────────────────────────────────────────
 
 @router.post("/{token}/join")
-def join_party(token: str, body: JoinRequest, db: Session = Depends(get_db)):
+def join_party(
+    token: str,
+    body: JoinRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     member = _get_member_by_token(db, token)
     if not member:
         return error_response("NOT_FOUND", "Invalid or expired invite link.", 404)
@@ -187,10 +197,12 @@ def join_party(token: str, body: JoinRequest, db: Session = Depends(get_db)):
 
     members = db.query(BillMember).filter(BillMember.bill_id == bill.id).all()
 
-    _broadcast_event(str(bill.id), "member_joined", {
-        "member_id": str(member.id),
-        "nickname": member.nickname,
-    })
+    background_tasks.add_task(
+        _broadcast_event,
+        str(bill.id),
+        "member_joined",
+        {"member_id": str(member.id), "nickname": member.nickname},
+    )
 
     return success_response(data={
         "member_id": str(member.id),
@@ -416,10 +428,10 @@ def payment_complete(
 
     bill_id_str = str(member.bill_id)
     background_tasks.add_task(
-        lambda: _broadcast_event(bill_id_str, "payment_complete", {
-            "member_id": str(member.id),
-            "nickname": member.nickname,
-        })
+        _broadcast_event,
+        bill_id_str,
+        "payment_complete",
+        {"member_id": str(member.id), "nickname": member.nickname},
     )
 
     return success_response(data={

@@ -34,7 +34,7 @@ def _schedule_payment_sms(bill_id: str, owner_id: str) -> None:
         db.close()
 
 
-def _broadcast_delta(
+async def _broadcast_delta(
     bill_id: str,
     action: str,
     receipt_item_id: str | None = None,
@@ -44,7 +44,7 @@ def _broadcast_delta(
     """Send a compact delta to connected WS clients instead of the full list."""
     if bill_ws_manager.client_count(bill_id) == 0:
         return
-    payload = {"action": action}
+    payload: dict = {"action": action}
     if receipt_item_id is not None:
         payload["receipt_item_id"] = receipt_item_id
     if bill_member_id is not None:
@@ -52,30 +52,34 @@ def _broadcast_delta(
     if assignment_id is not None:
         payload["assignment_id"] = assignment_id
     try:
-        loop = asyncio.get_event_loop()
-        loop.create_task(bill_ws_manager.broadcast(bill_id, "assignment_update", payload))
+        await bill_ws_manager.broadcast(bill_id, "assignment_update", payload)
     except Exception:
         logger.exception("WS delta broadcast failed for bill %s", bill_id)
 
 
-def _broadcast_full_sync(bill_id: str) -> None:
-    """Send the entire assignment list (used after bulk operations like auto-split)."""
-    if bill_ws_manager.client_count(bill_id) == 0:
-        return
+def _load_full_sync_payload(bill_id: str) -> dict:
+    """Synchronously load the full assignment list for a bill (run in a threadpool)."""
     db = SessionLocal()
     try:
         svc = CalculationService(db)
         assignments = svc.get_assignments(bill_id)
-        payload = {
+        return {
             "action": "full_sync",
             "assignments": [_assignment_out(a) for a in assignments],
         }
-        loop = asyncio.get_event_loop()
-        loop.create_task(bill_ws_manager.broadcast(bill_id, "assignment_update", payload))
-    except Exception:
-        logger.exception("WS full_sync broadcast failed for bill %s", bill_id)
     finally:
         db.close()
+
+
+async def _broadcast_full_sync(bill_id: str) -> None:
+    """Send the entire assignment list (used after bulk operations like auto-split)."""
+    if bill_ws_manager.client_count(bill_id) == 0:
+        return
+    try:
+        payload = await asyncio.to_thread(_load_full_sync_payload, bill_id)
+        await bill_ws_manager.broadcast(bill_id, "assignment_update", payload)
+    except Exception:
+        logger.exception("WS full_sync broadcast failed for bill %s", bill_id)
 
 
 def _assignment_out(assignment) -> dict:
