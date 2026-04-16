@@ -34,19 +34,46 @@ def _schedule_payment_sms(bill_id: str, owner_id: str) -> None:
         db.close()
 
 
-def _broadcast_assignments(bill_id: str) -> None:
-    """Fetch the full assignment list and broadcast to connected WS clients."""
+def _broadcast_delta(
+    bill_id: str,
+    action: str,
+    receipt_item_id: str | None = None,
+    bill_member_id: str | None = None,
+    assignment_id: str | None = None,
+) -> None:
+    """Send a compact delta to connected WS clients instead of the full list."""
+    if bill_ws_manager.client_count(bill_id) == 0:
+        return
+    payload = {"action": action}
+    if receipt_item_id is not None:
+        payload["receipt_item_id"] = receipt_item_id
+    if bill_member_id is not None:
+        payload["bill_member_id"] = bill_member_id
+    if assignment_id is not None:
+        payload["assignment_id"] = assignment_id
+    try:
+        loop = asyncio.get_event_loop()
+        loop.create_task(bill_ws_manager.broadcast(bill_id, "assignment_update", payload))
+    except Exception:
+        logger.exception("WS delta broadcast failed for bill %s", bill_id)
+
+
+def _broadcast_full_sync(bill_id: str) -> None:
+    """Send the entire assignment list (used after bulk operations like auto-split)."""
     if bill_ws_manager.client_count(bill_id) == 0:
         return
     db = SessionLocal()
     try:
         svc = CalculationService(db)
         assignments = svc.get_assignments(bill_id)
-        payload = [_assignment_out(a) for a in assignments]
+        payload = {
+            "action": "full_sync",
+            "assignments": [_assignment_out(a) for a in assignments],
+        }
         loop = asyncio.get_event_loop()
         loop.create_task(bill_ws_manager.broadcast(bill_id, "assignment_update", payload))
     except Exception:
-        logger.exception("WS broadcast failed for bill %s", bill_id)
+        logger.exception("WS full_sync broadcast failed for bill %s", bill_id)
     finally:
         db.close()
 
@@ -101,7 +128,15 @@ def create_assignments(
         a.member_nickname = a.member.nickname if a.member else None
         results.append(AssignmentOut.model_validate(a).model_dump())
 
-    background_tasks.add_task(_broadcast_assignments, str(bill_id))
+    for r in results:
+        background_tasks.add_task(
+            _broadcast_delta,
+            str(bill_id),
+            "added",
+            str(r.get("receipt_item_id", "")),
+            str(r.get("bill_member_id", "")),
+            str(r.get("id", "")),
+        )
 
     return success_response(data=results, message="Assignments created")
 
@@ -150,7 +185,14 @@ def update_assignment(
     assignment.item_name = assignment.item.name if assignment.item else None
     assignment.member_nickname = assignment.member.nickname if assignment.member else None
 
-    background_tasks.add_task(_broadcast_assignments, str(bill_id))
+    background_tasks.add_task(
+        _broadcast_delta,
+        str(bill_id),
+        "updated",
+        str(assignment.receipt_item_id),
+        str(assignment.bill_member_id),
+        str(assignment.id),
+    )
 
     return success_response(
         data=AssignmentOut.model_validate(assignment).model_dump(),
@@ -167,12 +209,26 @@ def delete_assignment(
     current_user: User = Depends(get_current_user),
 ):
     svc = CalculationService(db)
+    from app.models.item_assignment import ItemAssignment
+    assignment = db.query(ItemAssignment).filter(ItemAssignment.id == assignment_id).first()
+    if not assignment:
+        return error_response("NOT_FOUND", "Assignment not found", 404)
+    item_id = str(assignment.receipt_item_id)
+    member_id = str(assignment.bill_member_id)
+
     try:
         svc.delete_assignment(str(assignment_id))
     except ValueError:
         return error_response("NOT_FOUND", "Assignment not found", 404)
 
-    background_tasks.add_task(_broadcast_assignments, str(bill_id))
+    background_tasks.add_task(
+        _broadcast_delta,
+        str(bill_id),
+        "removed",
+        item_id,
+        member_id,
+        str(assignment_id),
+    )
 
     return success_response(message="Assignment deleted")
 
@@ -207,7 +263,7 @@ def auto_split(
         a.member_nickname = a.member.nickname if a.member else None
         results.append(AssignmentOut.model_validate(a).model_dump())
 
-    background_tasks.add_task(_broadcast_assignments, str(bill_id))
+    background_tasks.add_task(_broadcast_full_sync, str(bill_id))
 
     return success_response(data=results, message="Auto-split completed")
 

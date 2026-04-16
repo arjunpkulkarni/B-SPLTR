@@ -40,6 +40,9 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import asyncio
+    from app.services.ws_manager import bill_ws_manager
+
     sched = None
     if settings.REMINDER_JOB_INTERVAL_SEC > 0:
         try:
@@ -62,7 +65,16 @@ async def lifespan(app: FastAPI):
                 replace_existing=True,
             )
             sched.start()
+
+    heartbeat_task = asyncio.create_task(bill_ws_manager.start_heartbeat())
+
     yield
+
+    heartbeat_task.cancel()
+    try:
+        await heartbeat_task
+    except asyncio.CancelledError:
+        pass
     if sched is not None:
         sched.shutdown(wait=False)
 
